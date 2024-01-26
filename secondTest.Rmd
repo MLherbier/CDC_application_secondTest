@@ -1,0 +1,268 @@
+---
+title: "GBS - Second Test"
+author: "Mathias Lherbier"
+date: "2024-01-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(terra)
+library(tidyverse)
+```
+
+## Introduction
+
+The goal of this analysis is to review a piece of code that computes the area of the land use class 'Natural Forest' in km². 
+
+Input data are two rasters of similar dimensions, resolution and extent :
+- The FLII_earth_resampled raster contains information on inferred or observed forest cover. 
+- The Major_land_cover_palm_agroforestry_corrected raster provides land cover data, split in 4 classes (cropland, forestry, pasture and urban area) and natural area cover.
+
+
+## Data pre-processing
+Data is loaded using the rast function.
+```{r}
+
+temp_year_file_folder <- './'
+Major_land_cover_palm_agroforestry_corrected <- terra::rast('./Major_land_cover_palm_agroforestry_corrected.tif')
+FLII_earth_resampled <- terra::rast('./flii_earth_resampled.tif')
+
+```
+
+We will first be cropping rasters in order to reduce computation time as testing goes on.
+A sixth of the entire map will be used for our tests meaning that computation times would approximately be six times longer with the entire dataset.
+```{r}
+
+crop_extent <-c(-30,30,-15,15)
+FLII_earth_resampled_c <- crop(FLII_earth_resampled, crop_extent)
+Major_land_cover_palm_agroforestry_corrected_c <- crop(Major_land_cover_palm_agroforestry_corrected,crop_extent)
+
+```
+
+We will be evaluating computation time using the function system.time() from the base package.
+
+# Base function
+We first evaluate the function provided in the test:
+```{r}
+GBS_dev_test2 <- function(temp_year_file_folder,
+                          Major_land_cover_palm_agroforestry_corrected,
+                          FLII_earth_resampled) {
+
+
+  #Natural forest on cells where FLII > 9600 ####
+  #(values have been multiplied by 1000 according to read me file of FLII data: in the paper > 9.6)
+
+  forestry_natural_rate_filename <- glue::glue("{temp_year_file_folder}/forestry_natural_rate.tif")
+  
+  if (file.exists(forestry_natural_rate_filename) == FALSE) {
+    
+    forestry_natural_rate_intermediate <- terra::lapp(c(Major_land_cover_palm_agroforestry_corrected,
+                                                        FLII_earth_resampled),
+                                                      fun = function(x, y) ifelse((x == 3000 & y >= 9600), 1, 0),
+                                                      filename = glue::glue("{temp_year_file_folder}/forestry_natural_rate_intermediate.tif"),
+                                                      overwrite = TRUE)
+    
+    #Reclassify NA values into 0 (otherwise loss of 9Mkm² of forests worldwide)
+    forestry_natural_rate <- terra::lapp(c(forestry_natural_rate_intermediate),
+                                         fun = function(x) ifelse(x %in% c(NA, NaN, "NA", "NaN"),
+                                                                  0,
+                                                                  x),
+                                         filename = forestry_natural_rate_filename)
+    
+    
+  } else {
+    forestry_natural_rate <- rast(forestry_natural_rate_filename)
+  }
+  
+  
+  #Natural forest areas (km²) per GLOBIO country ####
+  Major_land_cover_area_filename <- glue::glue("{temp_year_file_folder}/terrestrial_LU_major_land_cover_area.tif")
+  
+  if (file.exists(Major_land_cover_area_filename) == FALSE) {
+    Major_land_cover_area <- cellSize(Major_land_cover_palm_agroforestry_corrected,
+                                      unit = "km",
+                                      filename = Major_land_cover_area_filename)
+  } else {
+    Major_land_cover_area <- rast(Major_land_cover_area_filename)
+  }
+  
+  #Multiply rate x area ####
+  forestry_natural_rate_x_area_filename <- glue::glue("{temp_year_file_folder}/forestry_natural_rate_x_area.tif")
+  
+  if (file.exists(forestry_natural_rate_x_area_filename) == FALSE) {
+    forestry_natural_rate_x_area <- terra::lapp(c(forestry_natural_rate,
+                                                  Major_land_cover_area),
+                                                fun = function(x, y) x * y,
+                                                filename = forestry_natural_rate_x_area_filename,
+                                                overwrite = TRUE)
+  } else {
+    forestry_natural_rate_x_area <- rast(forestry_natural_rate_x_area_filename)
+  }
+  
+}
+
+ #Testing computation time
+ system.time(GBS_dev_test2(temp_year_file_folder,
+                           Major_land_cover_palm_agroforestry_corrected_c,
+                           FLII_earth_resampled_c)) # 144s in my test run
+ 
+ #Saving output
+ forestry_natural_rate_x_area <- rast('./forestry_natural_rate_x_area.tif')
+ 
+```
+
+
+# Introducing dplyr package and the vectorized function is.na()
+In this second version of the function, some minor code changes have been applied to improve readability : declaring filenames, removing negation in the condition.
+In terms of performance, we now test using the case_when() from the dplyr package instead of ifelse().
+Since case_when() returns NAs when the condition is not met, we can also use the is.na() function in the second treatment.
+```{r}
+GBS_dev_test2_case <- function(temp_year_file_folder,
+                          Major_land_cover_palm_agroforestry_corrected,
+                          FLII_earth_resampled) {
+  
+    forestry_natural_rate_filename <- glue::glue("{temp_year_file_folder}/forestry_natural_rate.tif")
+    forestry_natural_rate_intermediate_filename <-glue::glue("{temp_year_file_folder}/forestry_natural_rate_intermediate.tif")
+    Major_land_cover_area_filename <- glue::glue("{temp_year_file_folder}/terrestrial_LU_major_land_cover_area.tif")
+    forestry_natural_rate_x_area_filename <- glue::glue("{temp_year_file_folder}/forestry_natural_rate_x_area.tif")
+  
+  #Natural forest on cells where FLII > 9600 ####
+  #(values have been multiplied by 1000 according to read me file of FLII data: in the paper > 9.6)
+  if (file.exists(forestry_natural_rate_filename)) {
+        forestry_natural_rate <- rast(forestry_natural_rate_filename)
+  } else {
+    forestry_natural_rate_intermediate <- terra::lapp(c(Major_land_cover_palm_agroforestry_corrected,
+                                                        FLII_earth_resampled),
+                                                      fun = function(x, y) case_when(
+                                                        x == 3000 & y >= 9600 ~ 1),
+                                                      filename = forestry_natural_rate_intermediate_filename,
+                                                      overwrite = TRUE)
+    
+    #Reclassify NA values into 0 (otherwise loss of 9Mkm² of forests worldwide)
+    forestry_natural_rate <- terra::lapp(c(forestry_natural_rate_intermediate),
+                                         fun = function(x) ifelse(is.na(x),0,x),
+                                         filename = forestry_natural_rate_filename)
+    }
+  
+  
+  #Natural forest areas (km²) per GLOBIO country ####
+  if (file.exists(Major_land_cover_area_filename)) {
+    Major_land_cover_area <- rast(Major_land_cover_area_filename)
+  } else {
+    Major_land_cover_area <- cellSize(Major_land_cover_palm_agroforestry_corrected,
+                                      unit = "km",
+                                      filename = Major_land_cover_area_filename)
+    }
+  
+  #Multiply rate x area ####
+  if (file.exists(forestry_natural_rate_x_area_filename)) {
+    forestry_natural_rate_x_area <- rast(forestry_natural_rate_x_area_filename)
+  } else {
+    forestry_natural_rate_x_area <- terra::lapp(c(forestry_natural_rate,
+                                                  Major_land_cover_area),
+                                                fun = function(x, y) x * y,
+                                                filename = forestry_natural_rate_x_area_filename,
+                                                overwrite = TRUE)
+    }
+  
+}
+
+ #Testing computation time
+ system.time(GBS_dev_test2_case(temp_year_file_folder,
+                           Major_land_cover_palm_agroforestry_corrected_c,
+                           FLII_earth_resampled_c)) # 89s in my test run
+ 
+ #Saving output
+ forestry_natural_rate_x_area_case <- rast('./forestry_natural_rate_x_area.tif')
+
+```
+
+
+# Taking advantage of the Raster Dataset format from terra package
+Instead of using the function c() to merge the rasters, we will now try using the function sds() that creates a SpatRasterDataset from the two rasters.
+```{r}
+GBS_dev_test2_case_sds <- function(temp_year_file_folder,
+                               Major_land_cover_palm_agroforestry_corrected,
+                               FLII_earth_resampled) {
+  
+    forestry_natural_rate_filename <- glue::glue("{temp_year_file_folder}/forestry_natural_rate.tif")
+    forestry_natural_rate_intermediate_filename <-glue::glue("{temp_year_file_folder}/forestry_natural_rate_intermediate.tif")
+    Major_land_cover_area_filename <- glue::glue("{temp_year_file_folder}/terrestrial_LU_major_land_cover_area.tif")
+    forestry_natural_rate_x_area_filename <- glue::glue("{temp_year_file_folder}/forestry_natural_rate_x_area.tif")
+
+  
+  #Natural forest on cells where FLII > 9600 ####
+  #(values have been multiplied by 1000 according to read me file of FLII data: in the paper > 9.6)
+  if (file.exists(forestry_natural_rate_filename)) {
+    forestry_natural_rate <- rast(forestry_natural_rate_filename)
+  } else {
+    forestry_natural_rate_intermediate <- terra::lapp(sds(list(Major_land_cover_palm_agroforestry_corrected,
+                                                        FLII_earth_resampled)),
+                                                      fun = function(x, y) case_when(
+                                                        x == 3000 & y >= 9600 ~ 1),
+                                                      filename = forestry_natural_rate_intermediate_filename,
+                                                      overwrite = TRUE)
+    
+    #Reclassify NA values into 0 (otherwise loss of 9Mkm² of forests worldwide)
+    forestry_natural_rate <- terra::lapp(c(forestry_natural_rate_intermediate),
+                                         fun = function(x) ifelse(is.na(x),0,x),
+                                         filename = forestry_natural_rate_filename)
+    }
+  
+  #Natural forest areas (km²) per GLOBIO country ####
+  if (file.exists(Major_land_cover_area_filename)) {
+    Major_land_cover_area <- rast(Major_land_cover_area_filename)
+  } else {
+    Major_land_cover_area <- cellSize(Major_land_cover_palm_agroforestry_corrected,
+                                      unit = "km",
+                                      filename = Major_land_cover_area_filename)
+    }
+  
+  #Multiply rate x area ####
+  if (file.exists(forestry_natural_rate_x_area_filename)) {
+    forestry_natural_rate_x_area <- rast(forestry_natural_rate_x_area_filename)
+  } else {
+    forestry_natural_rate_x_area <- terra::lapp(sds(list(forestry_natural_rate,
+                                                  Major_land_cover_area)),
+                                                fun = function(x, y) x * y,
+                                                filename = forestry_natural_rate_x_area_filename,
+                                                overwrite = TRUE)
+    }
+}
+
+ #Testing computation time
+ system.time(GBS_dev_test2_case_sds(temp_year_file_folder,
+                                    Major_land_cover_palm_agroforestry_corrected_c,
+                                    FLII_earth_resampled_c)) # 62s in my test run
+ 
+ #Saving output
+ forestry_natural_rate_x_area_case_sds <- rast('./forestry_natural_rate_x_area.tif')
+
+```
+
+We now examine if all outputs are equal : 
+```{r}
+all.equal(forestry_natural_rate_x_area,forestry_natural_rate_x_area_case) #TRUE
+
+all.equal(forestry_natural_rate_x_area,forestry_natural_rate_x_area_case_sds) # Only the component name is different (lyr1 vs lyr.1) but data is iso between the two outputs.
+
+```
+
+All results being equal, we would favor the third iteration of the function for improved computation times. 
+
+#Potential improvements
+
+To potentially decrease computation time, we could consider parallelizing certain operations.
+The function terra::lapp has an argument called cores built in that allows for parallel processing but it did not prove to be efficient in my tests. 
+A specific package called parallel also allows to process in parallel, while declaring the number of cores to be used in each cluster.
+
+
+Similarly to what I have done for my performance tests, we could process data in chunks to reduce computation times.
+Data could be split in chunks using the crop() function and eventually re-assembled using cbind() or rbind() if we decided to work on strips.
+
+
+Whatever the strategy we may want to use, it is necessary to test its performance on a smaller dataset to make sure it fits our needs and does not alter the results.
+
+
+
