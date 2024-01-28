@@ -255,10 +255,14 @@ All results being equal, we would favor the third iteration of the function for 
 
 The function as.data.frame() from the terra package can be used to turned the results into a data frame.
 The option xy being TRUE, the coordinates are included in the data frame.
+
 ```{r}
 results <- as.data.frame(forestry_natural_rate_x_area_case_sds, xy=T)
 
 ```
+
+If need be, results could be split into chunks, then converted to data frames and merged into one data frame to optimize performance.
+
 
 #Potential improvements
 
