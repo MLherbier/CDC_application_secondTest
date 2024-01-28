@@ -249,7 +249,16 @@ all.equal(forestry_natural_rate_x_area,forestry_natural_rate_x_area_case_sds) # 
 
 ```
 
-All results being equal, we would favor the third iteration of the function for improved computation times. 
+All results being equal, we would favor the third iteration of the function for improved computation times.
+
+# Converting results to a data frame
+
+The function as.data.frame() from the terra package can be used to turned the results into a data frame.
+The option xy being TRUE, the coordinates are included in the data frame.
+```{r}
+results <- as.data.frame(forestry_natural_rate_x_area_case_sds, xy=T)
+
+```
 
 #Potential improvements
 
@@ -263,6 +272,3 @@ Data could be split in chunks using the crop() function and eventually re-assemb
 
 
 Whatever the strategy we may want to use, it is necessary to test its performance on a smaller dataset to make sure it fits our needs and does not alter the results.
-
-
-
