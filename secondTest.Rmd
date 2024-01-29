@@ -114,7 +114,7 @@ GBS_dev_test2 <- function(temp_year_file_folder,
 
 
 # Introducing dplyr package and the vectorized function is.na()
-In this second version of the function, some minor code changes have been applied to improve readability : declaring filenames, removing negation in the condition.
+In this second version of the function, some minor code changes have been applied to improve readability : declaring filenames first, removing negation in the condition.
 In terms of performance, we now test using the case_when() from the dplyr package instead of ifelse().
 Since case_when() returns NAs when the condition is not met, we can also use the is.na() function in the second treatment.
 ```{r}
@@ -253,7 +253,7 @@ All results being equal, we would favor the third iteration of the function for 
 
 # Converting results to a data frame
 
-The function as.data.frame() from the terra package can be used to turned the results into a data frame.
+The function as.data.frame() from the terra package can be used to turn the results into a data frame.
 The option xy being TRUE, the coordinates are included in the data frame.
 
 ```{r}
@@ -275,4 +275,4 @@ Similarly to what I have done for my performance tests, we could process data in
 Data could be split in chunks using the crop() function and eventually re-assembled using cbind() or rbind() if we decided to work on strips.
 
 
-Whatever the strategy we may want to use, it is necessary to test its performance on a smaller dataset to make sure it fits our needs and does not alter the results.
+Whatever the strategy we will end up using, it will be necessary to test its performance on a smaller dataset to make sure it fits our needs and does not alter the results.
