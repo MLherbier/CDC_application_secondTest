@@ -110,11 +110,13 @@ GBS_dev_test2 <- function(temp_year_file_folder,
  #Saving output
  forestry_natural_rate_x_area <- rast('./forestry_natural_rate_x_area.tif')
  
+ unlink(c("forestry_natural_rate_x_area.tif","terrestrial_LU_major_land_cover_area.tif","forestry_natural_rate.tif","forestry_natural_rate_intermediate.tif"))
+ 
 ```
 
 
 # Introducing dplyr package and the vectorized function is.na()
-In this second version of the function, some minor code changes have been applied to improve readability : declaring filenames first, removing negation in the condition.
+In this second version of the function, some minor code changes have been applied to improve readability : declaring filenames, removing negation in the condition.
 In terms of performance, we now test using the case_when() from the dplyr package instead of ifelse().
 Since case_when() returns NAs when the condition is not met, we can also use the is.na() function in the second treatment.
 ```{r}
@@ -175,7 +177,9 @@ GBS_dev_test2_case <- function(temp_year_file_folder,
  
  #Saving output
  forestry_natural_rate_x_area_case <- rast('./forestry_natural_rate_x_area.tif')
-
+ 
+ unlink(c("forestry_natural_rate_x_area.tif","terrestrial_LU_major_land_cover_area.tif","forestry_natural_rate.tif","forestry_natural_rate_intermediate.tif"))
+ 
 ```
 
 
@@ -238,6 +242,8 @@ GBS_dev_test2_case_sds <- function(temp_year_file_folder,
  
  #Saving output
  forestry_natural_rate_x_area_case_sds <- rast('./forestry_natural_rate_x_area.tif')
+ 
+ unlink(c("forestry_natural_rate_x_area.tif","terrestrial_LU_major_land_cover_area.tif","forestry_natural_rate.tif","forestry_natural_rate_intermediate.tif"))
 
 ```
 
@@ -253,16 +259,12 @@ All results being equal, we would favor the third iteration of the function for 
 
 # Converting results to a data frame
 
-The function as.data.frame() from the terra package can be used to turn the results into a data frame.
+The function as.data.frame() from the terra package can be used to turned the results into a data frame.
 The option xy being TRUE, the coordinates are included in the data frame.
-
 ```{r}
 results <- as.data.frame(forestry_natural_rate_x_area_case_sds, xy=T)
 
 ```
-
-If need be, results could be split into chunks, then converted to data frames and merged into one data frame to optimize performance.
-
 
 #Potential improvements
 
@@ -275,4 +277,4 @@ Similarly to what I have done for my performance tests, we could process data in
 Data could be split in chunks using the crop() function and eventually re-assembled using cbind() or rbind() if we decided to work on strips.
 
 
-Whatever the strategy we will end up using, it will be necessary to test its performance on a smaller dataset to make sure it fits our needs and does not alter the results.
+Whatever the strategy we may want to use, it is necessary to test its performance on a smaller dataset to make sure it fits our needs and does not alter the results.
