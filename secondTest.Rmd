@@ -11,7 +11,7 @@ library(terra)
 library(tidyverse)
 ```
 
-## Introduction
+## Introductio
 
 The goal of this analysis is to review a piece of code that computes the area of the land use class 'Natural Forest' in km². 
 
